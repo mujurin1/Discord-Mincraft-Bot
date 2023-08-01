@@ -14,31 +14,29 @@ static class BotSetting
         get => _data;
         set
         {
-            _data = value;
-            ChangedData();
+            if (value != Data)
+            {
+                _data = value;
+                DiscordNotifire.ChangeWebhookUrl(Data.WebhookUrl);
+            }
         }
     }
 
-    private static FileSystemWatcher? _watcher = null;
+    private static FileSystemWatcher? _watcher;
 
     public static void Save(SettingData? data = null)
     {
         data ??= Data;
 
         if (_watcher is not null)
-        {
             _watcher.EnableRaisingEvents = false;
-            _watcher.Dispose();
-        }
 
         try
         {
             var filePath = System.IO.Path.Combine(Path, FileName);
             using var writer = File.CreateText(filePath);
 
-            var serializer = new SerializerBuilder()
-                .WithNamingConvention(CamelCaseNamingConvention.Instance)
-                .Build();
+            var serializer = new Serializer();
 
             serializer.Serialize(writer, data);
         }
@@ -47,62 +45,96 @@ static class BotSetting
             throw new Exception($"{FileName} の保存に失敗しました. 以下のメッセージを確認して下さい\n{e}");
         }
 
-        if (data != Data)
-        {
-            Data = data;
-        }
+        Data = data;
 
         StartWatchFile();
     }
 
-    public static bool Load()
+    public static async Task Load()
     {
-        if (LoadFromFile() is not SettingData data)
-            return false;
+        SettingData? data;
+        try
+        {
+            data = LoadFromFile();
+        }
+        catch (YamlDotNet.Core.YamlException ex)
+        {
+            throw new Exception($"{FileName} の読み込みに失敗しました. 以下の情報を確認して {FileName} を修正して下さい", ex);
+        }
+
+        if (data is null)
+        {
+            Program.ConsoleWriteLine($"{FileName} が存在しないため、新規作成します");
+
+            Save(new SettingData(await InputWebhookUrl()));
+
+            Program.ConsoleWriteLine($"{FileName} を新規作成しました");
+            return;
+        }
 
         var errors = data.CheckErrors();
         if (errors is { Count: > 0 })
         {
             throw new Exception(
                 $"""
-            {FileName} の内容が不正です
-            以下の情報を確認して {FileName} を修正して下さい
-            {errors.Join("\n")}
-            """
+                {FileName} の内容が不正です
+                以下の情報を確認して {FileName} を修正して下さい
+
+                {errors.Join("\n")}
+                """
             );
         }
 
-        Data = data;
-
-        return true;
-    }
-
-    private static void ChangedData()
-    {
-        DiscordNotifire.ChangeWebhookUrl(Data.WebhookUrl);
-    }
-
-    public static void StartWatchFile()
-    {
-        _watcher?.Dispose();
-
-        _watcher = new FileSystemWatcher()
+        if (!await DiscordNotifire.CheckWebhookUrl(data.WebhookUrl))
         {
-            Path = Path,
-            NotifyFilter = NotifyFilters.LastWrite,
-            Filter = FileName
-        };
-        _watcher.Changed += FileChanged;
+            Program.ConsoleWriteLine($"{FileName} の {nameof(SettingData.WebhookUrl)} が不正です");
+            data.WebhookUrl = await InputWebhookUrl();
+            Save(data);
+            Program.ConsoleWriteLine($"{FileName} を更新しました");
+            return;
+        }
 
+        Data = data;
+        StartWatchFile();
+    }
+
+    private static void StartWatchFile()
+    {
+        if (_watcher is not null)
+        {
+            _watcher.EnableRaisingEvents = true;
+            return;
+        }
+
+        _watcher = new FileSystemWatcher(Path, FileName)
+        {
+            NotifyFilter = NotifyFilters.LastWrite,
+        };
+
+        _watcher.Changed += FileChanged;
         _watcher.EnableRaisingEvents = true; // 監視を開始する
     }
 
-    private static void FileChanged(object source, FileSystemEventArgs e)
+    private static async void FileChanged(object source, FileSystemEventArgs e)
     {
-        if (LoadFromFile() is not SettingData data)
+        SettingData? data;
+        try
         {
-            Program.ConsoleWriteLine($"Minecraft Bot ERROR !");
-            Program.ConsoleWriteLine($"{FileName} のロードに失敗しました");
+            data = LoadFromFile();
+        }
+        catch (YamlDotNet.Core.YamlException ex)
+        {
+            Program.ConsoleWriteLine($"{FileName} の読み込みに失敗しました");
+            Program.ConsoleWriteLine($"以下のメッセージを見て {FileName} を修正して下さい");
+            Console.WriteLine();
+            Console.WriteLine(ex.ToString());
+            return;
+        }
+
+        if (data is null)
+        {
+            Program.ConsoleWriteLine($"{FileName} の読み込みに失敗しました");
+            Console.WriteLine($"{FileName} が存在しません");
             return;
         }
 
@@ -110,9 +142,17 @@ static class BotSetting
 
         if (errors.Count > 0)
         {
+            Program.ConsoleWriteLine($"{FileName} の読み込みに失敗しました");
             Program.ConsoleWriteLine($"{FileName} の内容が不正です");
             Program.ConsoleWriteLine($"以下の情報を確認して {FileName} を修正して下さい");
             Console.WriteLine($"\n{errors.Join("\n")}\n");
+            return;
+        }
+
+        if (!await DiscordNotifire.CheckWebhookUrl(data.WebhookUrl))
+        {
+            Program.ConsoleWriteLine($"{FileName} の読み込みに失敗しました");
+            Console.WriteLine($"{FileName} の {nameof(SettingData.WebhookUrl)} が無効です");
             return;
         }
 
@@ -124,22 +164,36 @@ static class BotSetting
     {
         var filePath = System.IO.Path.Combine(Path, FileName);
 
+        if (!File.Exists(filePath))
+            return null;
+
+        var deserializer = new Deserializer();
         try
         {
-            if (!File.Exists(filePath))
-                return null;
-
             using var stream = File.OpenText(filePath);
-
-            var deserializer = new DeserializerBuilder()
-                .WithNamingConvention(CamelCaseNamingConvention.Instance)
-                .Build();
-
             return deserializer.Deserialize<SettingData>(stream);
         }
-        catch
+        catch (IOException)
         {
-            return null;
+            Task.Delay(3000).Wait();
+
+            using var stream = File.OpenText(filePath);
+            return deserializer.Deserialize<SettingData>(stream);
+        }
+    }
+
+    private static async Task<string> InputWebhookUrl()
+    {
+        while (true)
+        {
+            Console.Write("ディスコードの WebHookUrl を入力して下さい > ");
+            var url = Console.ReadLine()!;
+
+            if (await DiscordNotifire.CheckWebhookUrl(url))
+                return url;
+
+            Console.WriteLine("無効なURLです");
+            Console.WriteLine();
         }
     }
 }
@@ -158,6 +212,13 @@ class SettingData
         public string ClosedServer { get; set; } = ":red_circle: サーバーを閉じました";
         public string Join { get; set; } = ":laughing: $1 さんが参加しました！";
         public string Exit { get; set; } = ":wave: $1 さんが退出しました";
+    }
+
+    public SettingData() { }
+
+    public SettingData(string webHookUrl)
+    {
+        WebhookUrl = webHookUrl;
     }
 
     public List<string> CheckErrors()

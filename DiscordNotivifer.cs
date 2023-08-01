@@ -17,6 +17,19 @@ static class DiscordNotifire
         return Webhook.SendAsync(DefaultMessage(message));
     }
 
+    public static async Task<bool> CheckWebhookUrl(string? url)
+    {
+        if (
+            string.IsNullOrWhiteSpace(url)
+            || !Uri.TryCreate(url, UriKind.Absolute, out Uri? uriResult)
+            || uriResult.Scheme != Uri.UriSchemeHttps
+        )
+            return false;
+
+        using var response = await Program.HttpClient.GetAsync(uriResult);
+        return response.StatusCode is System.Net.HttpStatusCode.OK;
+    }
+
     public static DiscordMessage DefaultMessage(
         string Content = "Default Message",
         string UserName = "Minecraft Notifier"

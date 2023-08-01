@@ -8,17 +8,20 @@ namespace MinecraftBot;
 
 class Program
 {
-    public static void Main()
+    public static HttpClient HttpClient { get; } = new();
+
+    public static async Task Main()
     {
         try
         {
-            Start();
+            await Start();
         }
         catch (Exception ex)
         {
             ConsoleWriteLine("予期せぬエラーが発生しました. アプリケーションを終了します");
+            ConsoleWriteLine("以下のメッセージを開発者へ送信して下さい");
             Console.WriteLine();
-            Console.WriteLine(ex.Message);
+            Console.WriteLine(ex.ToString());
         }
 
         Console.WriteLine();
@@ -27,27 +30,9 @@ class Program
         Console.ReadLine();
     }
 
-    private static void Start()
+    private static async Task Start()
     {
-        // BotSetting.Path = Directory.GetCurrentDirectory();
-
-        if (!BotSetting.Load())
-        {
-            ConsoleWriteLine($"{BotSetting.FileName} が存在しないため、新規作成します");
-
-            var data = new SettingData();
-            while (string.IsNullOrWhiteSpace(data.WebhookUrl))
-            {
-                Console.Write("ディスコードの WebHookUrl を入力して下さい > ");
-                data.WebhookUrl = Console.ReadLine()!;
-            }
-
-            BotSetting.Save(data);
-
-            ConsoleWriteLine($"{BotSetting.FileName} を新規作成しました");
-        }
-
-        BotSetting.StartWatchFile();
+        await BotSetting.Load();
 
         MinecraftProcess.Run();
         var process = MinecraftProcess.Process;
