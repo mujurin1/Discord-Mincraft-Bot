@@ -168,6 +168,7 @@ static class BotSetting
             return null;
 
         var deserializer = new Deserializer();
+
         try
         {
             using var stream = File.OpenText(filePath);
@@ -175,6 +176,7 @@ static class BotSetting
         }
         catch (IOException)
         {
+            // VisualStudioCode で保存すると即時の読み取りに失敗するため3秒待つ
             Task.Delay(3000).Wait();
 
             using var stream = File.OpenText(filePath);
