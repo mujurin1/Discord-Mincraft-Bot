@@ -1,4 +1,6 @@
-﻿using System.Diagnostics;
+﻿using System.Net.Mime;
+using System.Globalization;
+using System.Diagnostics;
 using System.Drawing;
 using CSharpDiscordWebhook.NET.Discord;
 
@@ -6,8 +8,6 @@ namespace MinecraftBot;
 
 class Program
 {
-    private static SettingData _setting => BotSetting.Data;
-
     public static void Main()
     {
         try
@@ -16,15 +16,9 @@ class Program
         }
         catch (Exception ex)
         {
-            ConsoleWriteLine("予期せぬエラーが発生しました");
-            ConsoleWriteLine("マインクラフトの動作には影響ありませんが、通知が行われなくなります");
-            ConsoleWriteLine("コマンドプロンプト (この画面) の文字が更新されなくなります");
+            ConsoleWriteLine("予期せぬエラーが発生しました. アプリケーションを終了します");
             Console.WriteLine();
-            ConsoleWriteLine("再度通知を有効化するには、サーバーを再起動して下さい");
-            Console.WriteLine();
-            ConsoleWriteLine("また、以下のエラーメッセージをコピーして報告して下さい");
             Console.WriteLine(ex.Message);
-            Console.WriteLine();
         }
 
         Console.WriteLine();
@@ -35,9 +29,25 @@ class Program
 
     private static void Start()
     {
-        BotSetting.StartWatchFile(Directory.GetCurrentDirectory());
-        BotSetting.Load(true);
-        DiscordNotifire.ChangeWebhookUrl(BotSetting.Data.WebhookUrl);
+        // BotSetting.Path = Directory.GetCurrentDirectory();
+
+        if (!BotSetting.Load())
+        {
+            ConsoleWriteLine($"{BotSetting.FileName} が存在しないため、新規作成します");
+
+            var data = new SettingData();
+            while (string.IsNullOrWhiteSpace(data.WebhookUrl))
+            {
+                Console.Write("ディスコードの WebHookUrl を入力して下さい > ");
+                data.WebhookUrl = Console.ReadLine()!;
+            }
+
+            BotSetting.Save(data);
+
+            ConsoleWriteLine($"{BotSetting.FileName} を新規作成しました");
+        }
+
+        BotSetting.StartWatchFile();
 
         MinecraftProcess.Run();
         var process = MinecraftProcess.Process;
@@ -79,23 +89,25 @@ class Program
         msg = msg[(msg.LastIndexOf("INFO]") + 7)..];
         // msg: mujurin joined the game
 
+        var messages = BotSetting.Data.Message;
+
         if (msg.IndexOf("joined the game") != -1)
         {
             var name = msg[..msg.IndexOf(' ')];
-            return _setting.Join.Replace("$1", name);
+            return messages.Join.Replace("$1", name);
         }
         else if (msg.IndexOf("left the game") != -1)
         {
             var name = msg[..msg.IndexOf(' ')];
-            return _setting.Exit.Replace("$1", name);
+            return messages.Exit.Replace("$1", name);
         }
         else if (msg.StartsWith("Done"))
         {
-            return _setting.OpendServer;
+            return messages.OpendServer;
         }
         else if (msg.StartsWith("Stopping server"))
         {
-            return _setting.ClosedServer;
+            return messages.ClosedServer;
         }
 
         return null;

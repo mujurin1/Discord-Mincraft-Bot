@@ -11,6 +11,9 @@ static class MinecraftProcess
         if (Process != null)
             return;
 
+        Console.WriteLine();
+        Program.ConsoleWriteLine("マインクラフトサーバーを起動します\n");
+
         Process = Process.Start(CreateProcessStartInfo())!;
 
         Process.BeginOutputReadLine();
@@ -21,7 +24,7 @@ static class MinecraftProcess
         return new ProcessStartInfo()
         {
             WorkingDirectory = BotSetting.Path,
-            FileName = @"java",
+            FileName = BotSetting.Data.Java,
             Arguments = BotSetting.Data.StartupArg,
             RedirectStandardOutput = true,
             // RedirectStandardInput = true,

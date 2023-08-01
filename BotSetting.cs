@@ -5,60 +5,88 @@ namespace MinecraftBot;
 
 static class BotSetting
 {
-    public static string Path { get; set; } = null!;
+    public static string Path { get; set; } = Directory.GetCurrentDirectory();
     public static readonly string FileName = "noticeApp.yml";
-    public static SettingData Data { get; private set; } = new();
+
+    private static SettingData _data = null!;
+    public static SettingData Data
+    {
+        get => _data;
+        set
+        {
+            _data = value;
+            ChangedData();
+        }
+    }
 
     private static FileSystemWatcher? _watcher = null;
 
-    public static void Save()
+    public static void Save(SettingData? data = null)
     {
-        _watcher?.Dispose();
+        data ??= Data;
 
-        var filePath = System.IO.Path.Combine(Path, FileName);
-        using var writer = File.CreateText(filePath);
-
-        var serializer = new SerializerBuilder()
-            .WithNamingConvention(CamelCaseNamingConvention.Instance)
-            .Build();
-
-        serializer.Serialize(writer, Data);
-
-        StartWatchFile(Path);
-    }
-
-    public static void Load(bool isCreate = false)
-    {
-        var filePath = System.IO.Path.Combine(Path, FileName);
-
-        if (!File.Exists(filePath))
+        if (_watcher is not null)
         {
-            if (isCreate)
-                Save();
-
-            return;
+            _watcher.EnableRaisingEvents = false;
+            _watcher.Dispose();
         }
 
-        using var stream = File.OpenText(filePath);
-
-        var deserializer = new DeserializerBuilder()
-            .WithNamingConvention(CamelCaseNamingConvention.Instance)
-            .Build();
-
-        if (deserializer.Deserialize<SettingData>(stream) is not SettingData data)
+        try
         {
-            throw new FileLoadException($"{FileName} の形式が不正です");
+            var filePath = System.IO.Path.Combine(Path, FileName);
+            using var writer = File.CreateText(filePath);
+
+            var serializer = new SerializerBuilder()
+                .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                .Build();
+
+            serializer.Serialize(writer, data);
+        }
+        catch (Exception e) when (e is UnauthorizedAccessException or DirectoryNotFoundException)
+        {
+            throw new Exception($"{FileName} の保存に失敗しました. 以下のメッセージを確認して下さい\n{e}");
+        }
+
+        if (data != Data)
+        {
+            Data = data;
+        }
+
+        StartWatchFile();
+    }
+
+    public static bool Load()
+    {
+        if (LoadFromFile() is not SettingData data)
+            return false;
+
+        var errors = data.CheckErrors();
+        if (errors is { Count: > 0 })
+        {
+            throw new Exception(
+                $"""
+            {FileName} の内容が不正です
+            以下の情報を確認して {FileName} を修正して下さい
+            {errors.Join("\n")}
+            """
+            );
         }
 
         Data = data;
+
+        return true;
     }
 
-    public static void StartWatchFile(string path)
+    private static void ChangedData()
     {
-        Path = path;
+        DiscordNotifire.ChangeWebhookUrl(Data.WebhookUrl);
+    }
+
+    public static void StartWatchFile()
+    {
         _watcher?.Dispose();
 
-        _watcher = new()
+        _watcher = new FileSystemWatcher()
         {
             Path = Path,
             NotifyFilter = NotifyFilters.LastWrite,
@@ -66,36 +94,88 @@ static class BotSetting
         };
         _watcher.Changed += FileChanged;
 
-        //監視を開始する
-        _watcher.EnableRaisingEvents = true;
+        _watcher.EnableRaisingEvents = true; // 監視を開始する
     }
 
     private static void FileChanged(object source, FileSystemEventArgs e)
     {
-        DiscordNotifire.ChangeWebhookUrl(Data.WebhookUrl);
+        if (LoadFromFile() is not SettingData data)
+        {
+            Program.ConsoleWriteLine($"Minecraft Bot ERROR !");
+            Program.ConsoleWriteLine($"{FileName} のロードに失敗しました");
+            return;
+        }
+
+        var errors = data.CheckErrors();
+
+        if (errors.Count > 0)
+        {
+            Program.ConsoleWriteLine($"{FileName} の内容が不正です");
+            Program.ConsoleWriteLine($"以下の情報を確認して {FileName} を修正して下さい");
+            Console.WriteLine($"\n{errors.Join("\n")}\n");
+            return;
+        }
+
+        Data = data;
+        Program.ConsoleWriteLine($"{FileName} の変更を反映しました");
+    }
+
+    public static SettingData? LoadFromFile()
+    {
+        var filePath = System.IO.Path.Combine(Path, FileName);
 
         try
         {
-            Load();
-            Program.ConsoleWriteLine($"{FileName} の変更を反映しました");
+            if (!File.Exists(filePath))
+                return null;
+
+            using var stream = File.OpenText(filePath);
+
+            var deserializer = new DeserializerBuilder()
+                .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                .Build();
+
+            return deserializer.Deserialize<SettingData>(stream);
         }
-        catch (Exception ex)
+        catch
         {
-            Console.WriteLine();
-            Program.ConsoleWriteLine("INTERNAL ERROR:");
-            Console.WriteLine(ex.ToString());
-            Console.WriteLine();
+            return null;
         }
     }
 }
 
 class SettingData
 {
+    public string Java { get; set; } = "java";
     public string StartupArg { get; set; } = "-Xmx2048M -jar paper.jar nogui";
     public string WebhookUrl { get; set; } = "";
     public string BotName { get; set; } = "Minecraft Notifier";
-    public string OpendServer { get; set; } = ":green_circle: サーバーを開きました";
-    public string ClosedServer { get; set; } = ":red_circle: サーバーを閉じました";
-    public string Join { get; set; } = ":laughing: $1 さんが参加しました！";
-    public string Exit { get; set; } = ":wave: $1 さんが退出しました";
+    public MessageText Message { get; set; } = new();
+
+    public class MessageText
+    {
+        public string OpendServer { get; set; } = ":green_circle: サーバーを開きました";
+        public string ClosedServer { get; set; } = ":red_circle: サーバーを閉じました";
+        public string Join { get; set; } = ":laughing: $1 さんが参加しました！";
+        public string Exit { get; set; } = ":wave: $1 さんが退出しました";
+    }
+
+    public List<string> CheckErrors()
+    {
+        var errors = Utils
+            .FilterNullOrWhiteSpace(
+                (nameof(Java), Java),
+                (nameof(StartupArg), StartupArg),
+                (nameof(WebhookUrl), WebhookUrl),
+                (nameof(BotName), BotName),
+                (nameof(Message.OpendServer), Message.OpendServer),
+                (nameof(Message.ClosedServer), Message.ClosedServer),
+                (nameof(Message.Join), Message.Join),
+                (nameof(Message.Exit), Message.Exit)
+            )
+            .Select(name => $"> {name} が空文字です")
+            .ToList();
+
+        return errors;
+    }
 }
