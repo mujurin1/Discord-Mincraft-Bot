@@ -230,11 +230,7 @@ class SettingData
                 (nameof(Java), Java),
                 (nameof(StartupArg), StartupArg),
                 (nameof(WebhookUrl), WebhookUrl),
-                (nameof(BotName), BotName),
-                (nameof(Message.OpendServer), Message.OpendServer),
-                (nameof(Message.ClosedServer), Message.ClosedServer),
-                (nameof(Message.Join), Message.Join),
-                (nameof(Message.Exit), Message.Exit)
+                (nameof(BotName), BotName)
             )
             .Select(name => $"> {name} が空文字です")
             .ToList();

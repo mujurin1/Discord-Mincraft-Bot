@@ -35,7 +35,7 @@ static class DiscordNotifire
         string UserName = "Minecraft Notifier"
     )
     {
-        return new()
+        return new DiscordMessage()
         {
             Content = Content,
             // TTS = true, //read message to everyone on the channel

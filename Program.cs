@@ -62,9 +62,9 @@ class Program
         if (string.IsNullOrWhiteSpace(msg))
             return;
 
-        if (MinecraftLogToNoticeMessage(msg) is string _message)
+        if (MinecraftLogToNoticeMessage(msg) is string _msg && !string.IsNullOrWhiteSpace(_msg))
         {
-            DiscordNotifire.Notice(_message);
+            DiscordNotifire.Notice(_msg);
         }
     }
 
