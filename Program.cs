@@ -1,8 +1,4 @@
-﻿using System.Net.Mime;
-using System.Globalization;
-using System.Diagnostics;
-using System.Drawing;
-using CSharpDiscordWebhook.NET.Discord;
+﻿using System.Diagnostics;
 
 namespace MinecraftBot;
 
@@ -19,7 +15,9 @@ class Program
         catch (Exception ex)
         {
             ConsoleWriteLine("予期せぬエラーが発生しました. アプリケーションを終了します");
-            ConsoleWriteLine("以下のメッセージを開発者へ送信して下さい");
+            ConsoleWriteLine("以下のメッセージをみて対策を試みて下さい");
+            Console.WriteLine();
+            ConsoleWriteLine("(内容が不明なエラーの場合は開発者に報告して下さい)");
             Console.WriteLine();
             Console.WriteLine(ex.ToString());
         }
@@ -62,44 +60,70 @@ class Program
         if (string.IsNullOrWhiteSpace(msg))
             return;
 
-        if (MinecraftLogToNoticeMessage(msg) is string _msg && !string.IsNullOrWhiteSpace(_msg))
+        if (NoticeMessage.FromMinecraftLog(msg) is NoticeMessage message)
         {
-            DiscordNotifire.Notice(_msg);
+            DiscordNotifire.Notice(message.Content);
         }
-    }
-
-    private static string? MinecraftLogToNoticeMessage(string msg)
-    {
-        // msg: [06:02:37 INFO]: mujurin joined the game
-        msg = msg[(msg.LastIndexOf("INFO]") + 7)..];
-        // msg: mujurin joined the game
-
-        var messages = BotSetting.Data.Message;
-
-        if (msg.IndexOf("joined the game") != -1)
-        {
-            var name = msg[..msg.IndexOf(' ')];
-            return messages.Join.Replace("$1", name);
-        }
-        else if (msg.IndexOf("left the game") != -1)
-        {
-            var name = msg[..msg.IndexOf(' ')];
-            return messages.Exit.Replace("$1", name);
-        }
-        else if (msg.StartsWith("Done"))
-        {
-            return messages.OpendServer;
-        }
-        else if (msg.StartsWith("Stopping server"))
-        {
-            return messages.ClosedServer;
-        }
-
-        return null;
     }
 
     public static void ConsoleWriteLine(string? message)
     {
         Console.WriteLine($"NoticeBOT > {message}");
     }
+}
+
+class NoticeMessage
+{
+    public MessageType Type { get; set; }
+    public string Content { get; set; } = null!;
+
+
+    public static NoticeMessage? FromMinecraftLog(string log)
+    {
+        log = log[(log.LastIndexOf("INFO]") + 7)..];
+        if (string.IsNullOrWhiteSpace(log)) return null;
+
+        if (log.IndexOf("joined the game") != -1)
+        {
+            return new NoticeMessage
+            {
+                Content = BotSetting.Data.Message.Join.Replace("{name}", log[..log.IndexOf(' ')]),
+                Type = MessageType.Join,
+            };
+        }
+        else if (log.IndexOf("left the game") != -1)
+        {
+            return new NoticeMessage
+            {
+                Content = BotSetting.Data.Message.Left.Replace("{name}", log[..log.IndexOf(' ')]),
+                Type = MessageType.Join,
+            };
+        }
+        else if (log.StartsWith("Done"))
+        {
+            return new NoticeMessage
+            {
+                Content = BotSetting.Data.Message.OpendServer,
+                Type = MessageType.Join,
+            };
+        }
+        else if (log.StartsWith("Stopping server"))
+        {
+            return new NoticeMessage
+            {
+                Content = BotSetting.Data.Message.ClosedServer,
+                Type = MessageType.Join,
+            };
+        }
+
+        return null;
+    }
+}
+
+enum MessageType
+{
+    Open = 0,
+    Close = 1,
+    Join = 2,
+    Exit = 3,
 }

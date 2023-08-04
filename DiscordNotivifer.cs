@@ -9,10 +9,10 @@ static class DiscordNotifire
 
     public static void ChangeWebhookUrl(string url)
     {
-        Webhook.Uri = new(url);
+        Webhook.WebhookUrl = new(url);
     }
 
-    public static Task Notice(string message)
+    public static Task<DiscordResponse> Notice(string message)
     {
         return Webhook.SendAsync(DefaultMessage(message));
     }
@@ -20,26 +20,34 @@ static class DiscordNotifire
     public static async Task<bool> CheckWebhookUrl(string? url)
     {
         if (
-            string.IsNullOrWhiteSpace(url)
-            || !Uri.TryCreate(url, UriKind.Absolute, out Uri? uriResult)
-            || uriResult.Scheme != Uri.UriSchemeHttps
+            string.IsNullOrWhiteSpace(url) ||
+            !Uri.TryCreate(url, UriKind.Absolute, out Uri? uriResult) ||
+            uriResult.Scheme != Uri.UriSchemeHttps
         )
             return false;
 
         using var response = await Program.HttpClient.GetAsync(uriResult);
-        return response.StatusCode is System.Net.HttpStatusCode.OK;
+        return response.IsSuccessStatusCode;
     }
 
     public static DiscordMessage DefaultMessage(
-        string Content = "Default Message",
-        string UserName = "Minecraft Notifier"
+        string content,
+        string? userName = null,
+        DiscordMessageFlag flag = DiscordMessageFlag.None
     )
     {
+        if (content.IndexOf("@silent") == 0)
+        {
+            content = content[7..].TrimStart();
+            flag |= DiscordMessageFlag.SUPPRESS_NOTIFICATIONS;
+        }
+
         return new DiscordMessage()
         {
-            Content = Content,
+            Content = content,
             // TTS = true, //read message to everyone on the channel
-            Username = UserName,
+            Username = userName ?? BotSetting.Data.BotName,
+            Flags = flag
         };
     }
 
@@ -95,3 +103,5 @@ static class DiscordNotifire
         return embed;
     }
 }
+
+

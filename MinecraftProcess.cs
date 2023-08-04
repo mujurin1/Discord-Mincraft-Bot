@@ -11,7 +11,6 @@ static class MinecraftProcess
         if (Process != null)
             return;
 
-        Console.WriteLine();
         Program.ConsoleWriteLine("マインクラフトサーバーを起動します\n");
 
         Process = Process.Start(CreateProcessStartInfo())!;
