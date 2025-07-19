@@ -53,7 +53,6 @@ partial class Program
         var msg = e.Data;
         Console.WriteLine(msg);
 
-        ConsoleWriteLine(msg);
         if (string.IsNullOrWhiteSpace(msg))
             return;
 
