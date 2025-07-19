@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Discord Mincraft Bot": {
+      "commandName": "Project",
+      "workingDirectory": "D:\\Minecraft\\ver1.21.8"
+    }
+  }
+}

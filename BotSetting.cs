@@ -11,13 +11,10 @@ static class BotSetting
     public static readonly string FileFullName = $"{FileName}.{FileExtend}";
 
     private static SettingData _data = null!;
-    public static SettingData Data
-    {
+    public static SettingData Data {
         get => _data;
-        set
-        {
-            if (value != Data)
-            {
+        set {
+            if (value != Data) {
                 _data = value;
                 DiscordNotifire.ChangeWebhookUrl(Data.WebhookUrl);
             }
@@ -33,15 +30,12 @@ static class BotSetting
 
         if (_watcher is not null) _watcher.EnableRaisingEvents = false;
 
-        try
-        {
+        try {
             var filePath = System.IO.Path.Combine(Path, fileName);
             using var writer = File.CreateText(filePath);
             var serializer = new Serializer();
             serializer.Serialize(writer, data);
-        }
-        catch (Exception e) when (e is UnauthorizedAccessException or DirectoryNotFoundException)
-        {
+        } catch (Exception e) when (e is UnauthorizedAccessException or DirectoryNotFoundException) {
             throw new Exception($"{fileName} の保存に失敗しました. 以下のメッセージを確認して下さい\n{e}");
         }
 
@@ -51,15 +45,10 @@ static class BotSetting
 
     public static async Task Load()
     {
-        // このメソッド特に汚くてつらくなりそう(´・ω・`)
-
         SettingData? data = null;
-        try
-        {
+        try {
             data = LoadFromFile();
-        }
-        catch (YamlDotNet.Core.YamlException)
-        {
+        } catch (YamlDotNet.Core.YamlException) {
             //MEMO: バージョンアップの差で読み取り不可能な場合
             //      あるいは、記述を間違えたせい
             Program.ConsoleWriteLine($"バージョンアップにより {FileFullName} の内容が変わっているか、記述を間違えているため読み取りに失敗しました");
@@ -69,8 +58,7 @@ static class BotSetting
             File.Move(FileFullName, saveOldFileName);
         }
 
-        if (data is null)
-        {
+        if (data is null) {
             Program.ConsoleWriteLine($"{FileFullName} が存在しないため、新規作成します");
             Save(new SettingData(await InputWebhookUrl()) { DontEditThisValue = SettingData.CURRENT_SETTING_VALUE });
             Program.ConsoleWriteLine($"{FileFullName} を新規作成しました");
@@ -80,8 +68,7 @@ static class BotSetting
         var errors = data.CheckErrors();
         if (errors.Count == 0) errors = await data.CheckStrictErrors();
 
-        if (errors.Count > 0)
-        {
+        if (errors.Count > 0) {
             throw new Exception(
                 $"""
                 {FileFullName} の読み込みに失敗しました. {FileFullName} の内容が不正です
@@ -94,8 +81,7 @@ static class BotSetting
 
         Data = data;
 
-        if (!Data.CheckLatestVersion())
-        {
+        if (!Data.CheckLatestVersion()) {
             // MEMO: バージョンアップしてるけど、ファイルの読み取りは出来た場合
             //       けど、内容が変わっているよってことを伝える & 以前の内容を消さないために
 
@@ -118,14 +104,12 @@ static class BotSetting
 
     private static void StartWatchFile()
     {
-        if (_watcher is not null)
-        {
+        if (_watcher is not null) {
             _watcher.EnableRaisingEvents = true;
             return;
         }
 
-        _watcher = new FileSystemWatcher(Path, FileFullName)
-        {
+        _watcher = new FileSystemWatcher(Path, FileFullName) {
             NotifyFilter = NotifyFilters.LastWrite,
         };
 
@@ -136,20 +120,16 @@ static class BotSetting
     private static async void FileChanged(object source, FileSystemEventArgs e)
     {
         SettingData? data;
-        try
-        {
+        try {
             data = LoadFromFile();
-        }
-        catch (YamlDotNet.Core.YamlException ex)
-        {
+        } catch (YamlDotNet.Core.YamlException ex) {
             Program.ConsoleWriteLine($"{FileFullName} の読み込みに失敗しました");
             Program.ConsoleWriteLine($"以下のメッセージを見て {FileFullName} を修正して下さい\n");
             Console.WriteLine(ex.ToString());
             return;
         }
 
-        if (data is null)
-        {
+        if (data is null) {
             Program.ConsoleWriteLine($"{FileFullName} の読み込みに失敗しました");
             Console.WriteLine($"{FileFullName} が存在しません");
             return;
@@ -158,8 +138,7 @@ static class BotSetting
         var errors = data.CheckErrors();
         if (errors.Count == 0) errors = await data.CheckStrictErrors();
 
-        if (errors.Count > 0)
-        {
+        if (errors.Count > 0) {
             Program.ConsoleWriteLine($"{FileFullName} の読み込みに失敗しました");
             Program.ConsoleWriteLine($"{FileFullName} の内容が不正です");
             Program.ConsoleWriteLine($"以下の情報を確認して {FileFullName} を修正して下さい\n");
@@ -180,13 +159,10 @@ static class BotSetting
 
         var deserializer = new Deserializer();
 
-        try
-        {
+        try {
             using var stream = File.OpenText(filePath);
             return deserializer.Deserialize<SettingData>(stream);
-        }
-        catch (IOException)
-        {
+        } catch (IOException) {
             // VisualStudioCode で保存すると即時の読み取りに失敗するため3秒待つ
             Task.Delay(3000).Wait();
 
@@ -197,8 +173,7 @@ static class BotSetting
 
     private static async Task<string> InputWebhookUrl()
     {
-        while (true)
-        {
+        while (true) {
             Console.Write("ディスコードの WebHookUrl を入力して下さい > ");
             var url = Console.ReadLine()!;
 

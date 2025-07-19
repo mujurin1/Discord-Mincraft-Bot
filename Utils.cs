@@ -19,8 +19,7 @@ static class Utils
 
         var serial = 1;
 
-        while (true)
-        {
+        while (true) {
             var newFileName = $"{fileName} ({serial}).{fileExtend}";
             if (!File.Exists(Path.Combine(dir, newFileName)))
                 return newFileName;
